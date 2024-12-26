@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Voting Platform</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --background-color: #f4f4f4;
+            --card-background: #ffffff;
+            --text-color: #333;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            line-height: 1.6;
+            color: var(--text-color);
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: var(--primary-color);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .section {
+            background-color: var(--card-background);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+        }
+
+        .proposal-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .proposal-card {
+            background-color: var(--card-background);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .proposal-card .status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .proposal-card .status.pending {
+            color: orange;
+        }
+
+        .proposal-card .status.accepted {
+            color: green;
+        }
+
+        .proposal-card .status.rejected {
+            color: red;
+        }
+
+        #membershipSection {
+            display: none;
+        }
+
+        #proposalSection {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Community Voting Platform</h1>
+            <p>Decentralized Community Governance</p>
+        </header>
+
+        <section class="section" id="walletConnection">
+            <h2>Connect Wallet</h2>
+            <button id="connectWalletBtn" class="btn">Connect MetaMask</button>
+            <p id="walletStatus">Not Connected</p>
+        </section>
+
+        <section class="section" id="membershipSection">
+            <h2>Community Membership</h2>
+            <div id="membershipStatus">
+                <p>Not a Member</p>
+                <button id="joinCommunityBtn" class="btn">Join Community (0.1 ETH)</button>
+            </div>
+        </section>
+
+        <section class="section" id="proposalCreation">
+            <h2>Create Proposal</h2>
+            <form id="createProposalForm">
+                <div class="form-group">
+                    <label for="proposalTitle">Proposal Title</label>
+                    <input type="text" id="proposalTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="proposalDescription">Proposal Description</label>
+                    <textarea id="proposalDescription" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="minimumQuorum">Minimum Quorum (%)</label>
+                    <input type="number" id="minimumQuorum" min="1" max="100" required>
+                </div>
+                <div class="form-group">
+                    <label for="requiredMajority">Required Majority (%)</label>
+                    <input type="number" id="requiredMajority" min="1" max="100" required>
+                </div>
+                <button type="submit" class="btn">Create Proposal</button>
+            </form>
+        </section>
+
+        <section class="section" id="proposalSection">
+            <h2>Active Proposals</h2>
+            <div id="proposalList" class="proposal-list">
+                <!-- Proposals will be dynamically added here -->
+            </div>
+        </section>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            let web3, contract, accounts;
+            const contractAddress = '0xBb742B586B88206d225Cb3f9b6fea8E2fcF20571'; // Replace with your deployed contract address
+            const contractABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_minimumQuorum",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_requiredMajority",
+				"type": "uint256"
+			}
+		],
+		"name": "createProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "finalizeProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "joinCommunity",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "member",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "joinedAt",
+				"type": "uint256"
+			}
+		],
+		"name": "MemberRegistered",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "proposer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "creationTime",
+				"type": "uint256"
+			}
+		],
+		"name": "ProposalCreated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "enum CommunityVotingPlatform.ProposalStatus",
+				"name": "status",
+				"type": "uint8"
+			}
+		],
+		"name": "ProposalFinalized",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "_support",
+				"type": "bool"
+			}
+		],
+		"name": "vote",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "voter",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "vote",
+				"type": "bool"
+			}
+		],
+		"name": "Voted",
+		"type": "event"
+	},
+	{
+		"stateMutability": "payable",
+		"type": "receive"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "getProposalDetails",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "proposer",
+				"type": "address"
+			},
+			{
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "creationTime",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "votingDeadline",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum CommunityVotingPlatform.ProposalStatus",
+				"name": "status",
+				"type": "uint8"
+			},
+			{
+				"internalType": "uint256",
+				"name": "yesVotes",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "noVotes",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "memberCounter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "members",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "isMember",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "joinedAt",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "reputation",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "MEMBERSHIP_FEE",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "MINIMUM_MEMBERSHIP_DURATION",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "proposalCounter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "proposals",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "proposer",
+				"type": "address"
+			},
+			{
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "creationTime",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "votingDeadline",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "minimumQuorum",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "requiredMajority",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum CommunityVotingPlatform.ProposalStatus",
+				"name": "status",
+				"type": "uint8"
+			},
+			{
+				"internalType": "uint256",
+				"name": "yesVotes",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "noVotes",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "VOTING_PERIOD",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+] // Replace with your contract ABI
+
+            const connectWalletBtn = document.getElementById('connectWalletBtn');
+            const walletStatus = document.getElementById('walletStatus');
+            const membershipSection = document.getElementById('membershipSection');
+            const proposalSection = document.getElementById('proposalSection');
+            const joinCommunityBtn = document.getElementById('joinCommunityBtn');
+            const createProposalForm = document.getElementById('createProposalForm');
+            const proposalList = document.getElementById('proposalList');
+
+            // Connect Wallet
+            connectWalletBtn.addEventListener('click', async () => {
+                if (typeof window.ethereum !== 'undefined') {
+                    try {
+                        // Request account access
+                        accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                        web3 = new Web3(window.ethereum);
+                        
+                        // Create contract instance
+                        contract = new web3.eth.Contract(contractABI, contractAddress);
+
+                        walletStatus.textContent = `Connected: ${accounts[0]}`;
+                        connectWalletBtn.style.display = 'none';
+
+                        // Check membership status
+                        await checkMembershipStatus();
+                    } catch (error) {
+                        console.error("User denied account access");
+                        walletStatus.textContent = 'Connection Failed';
+                    }
+                } else {
+                    alert('Please install MetaMask!');
+                }
+            });
+
+            // Check Membership Status
+            async function checkMembershipStatus() {
+                try {
+                    const member = await contract.methods.members(accounts[0]).call();
+                    
+                    if (member.isMember) {
+                        membershipSection.querySelector('#membershipStatus p').textContent = 'Registered Community Member';
+                        joinCommunityBtn.style.display = 'none';
+                        
+                        // Show proposal sections
+                        proposalSection.style.display = 'block';
+                        await fetchProposals();
+                    } else {
+                        membershipSection.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Error checking membership:', error);
+                }
+            }
+
+            // Join Community
+            joinCommunityBtn.addEventListener('click', async () => {
+                try {
+                    const membershipFee = web3.utils.toWei('0.1', 'ether');
+                    await contract.methods.joinCommunity().send({
+                        from: accounts[0],
+                        value: membershipFee
+                    });
+                    alert('Joined Community Successfully!');
+                    await checkMembershipStatus();
+                } catch (error) {
+                    console.error('Error joining community:', error);
+                    alert('Failed to join community');
+                }
+            });
+
+            // Create Proposal
+            createProposalForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const title = document.getElementById('proposalTitle').value;
+                const description = document.getElementById('proposalDescription').value;
+                const minimumQuorum = document.getElementById('minimumQuorum').value;
+                const requiredMajority = document.getElementById('requiredMajority').value;
+
+                try {
+                    await contract.methods.createProposal(
+                        title, 
+                        description, 
+                        minimumQuorum, 
+                        requiredMajority
+                    ).send({ from: accounts[0] });
+                    
+                    alert('Proposal Created Successfully!');
+                    createProposalForm.reset();
+                    await fetchProposals();
+                } catch (error) {
+                    console.error('Error creating proposal:', error);
+                    alert('Failed to create proposal');
+                }
+            });
+
+            // Fetch Proposals
+            async function fetchProposals() {
+                try {
+                    const proposalCounter = await contract.methods.proposalCounter().call();
+                    proposalList.innerHTML = ''; // Clear existing proposals
+
+                    for (let i = 1; i <= proposalCounter; i++) {
+                        const proposal = await contract.methods.getProposalDetails(i).call();
+                        
+                        const proposalCard = document.createElement('div');
+                        proposalCard.classList.add('proposal-card');
+                        
+                        // Determine status color
+                        let statusClass = 'pending';
+                        if (proposal.status === '1') statusClass = 'accepted';
+                        if (proposal.status === '2') statusClass = 'rejected';
+                        if (proposal.status === '3') statusClass = 'expired';
+
+                        proposalCard.innerHTML = `
+                            <div class="status ${statusClass}">
+                                Status: ${['Pending', 'Accepted', 'Rejected', 'Expired'][proposal.status]}
+                            </div>
+                            <h3>${proposal.title}</h3>
+                            <p>${proposal.description}</p>
+                            <div>
+                                <strong>Yes Votes:</strong> ${proposal.yesVotes}
+                                <strong>No Votes:</strong> ${proposal.noVotes}
+                            </div>
+                            <button onclick="voteOnProposal(${proposal.id}, true)" class="btn">Vote Yes</button>
+                            <button onclick="voteOnProposal(${proposal.id}, false)" class="btn">Vote No</button>
+                        `;
+
+                        proposalList.appendChild(proposalCard);
+                    }
+                } catch (error) {
+                    console.error('Error fetching proposals:', error);
+                }
+            }
+
+            // Vote on Proposal (global function for onclick)
+            window.voteOnProposal = async (proposalId, support) => {
+                try {
+                    await contract.methods.vote(proposalId, support).send({ from: accounts[0] });
+                    alert('Voted Successfully!');
+                    await fetchProposals();
+                } catch (error) {
+                    console.error('Error voting:', error);
+                    alert('Failed to vote');
+                }
+            };
+        });
+    </script>
+    
+    <!-- Web3.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.5.2/web3.min.js"></script>
+</body>
+</html>
